@@ -1,8 +1,13 @@
 ---
 title: EDS 222 HW1
 subtitle: Foundations of inference
-author: Your Name Here
+author: Veronica Moran
 ---
+
+```{r}
+library(tidyverse)
+```
+
 
 ## 1. Conduct a permutation test
 
@@ -10,11 +15,163 @@ Conduct a permutation test to investigate the following question:
 
 > Do homes built pre-1970 have higher average lead soil concentrations?
 
-To perform this test, you'll need the `exide-property-covariates.csv` file found in `/courses/EDS222/data`. This file contains the year each property was built.
+To perform this test, you'll need the `exide-property-covariates.csv` file found in `/courses/EDS222/data`. 
+This file contains the year each property was built.
 
 ::: {.callout-note}
 
-The question is about _average lead soil concentrations_. You'll need to first get the average lead soil concentration for each property, then join your result to the property covariate data to get the year the house was built.
+The question is about _average lead soil concentrations_. 
+You'll need to first get the average lead soil concentration for each property,
+then join your result to the property covariate data to get the year the house was built.
+
+## Permutation Test: Average Lead Soil Concentrations
+# Comparing Homes Built Before 1970 and Homes Built in 1970 or Later
+
+# Question
+Do homes built pre-1970 have higher average lead soil concentrations?
+
+## Hypothesis
+
+Ho: There is no difference in lead concentration between homes built before 1970 and homes built in 1970 or later
+Ha: Homes built before 1970 have higher lead concentrations compared to home built in 1970 or later
+
+# Method
+
+
+
+```{r}
+soil_cores<-read_csv("exide-soil-cores.csv")
+
+glimpse(soil_cores)
+```
+
+```{r}
+cov <- read_csv("exide-property-covariates.csv")
+
+glimpse(cov)
+```
+
+
+```{r}
+glimpse(soil_cores)
+glimpse(cov)
+```
+
+```{r}
+cov <- cov |>
+  filter(!is.na(year_built))
+```
+
+
+```{r}
+pi_means<- soil_cores |> 
+    summarize(mean_pb_ppm = mean(pb_ppm), .by = property_id)
+```
+
+```{r}
+# Joining datasets
+# Property id is shared key
+
+sc <- pi_means|>
+  inner_join(cov, join_by(property_id)) |> 
+  select(property_id, mean_pb_ppm, year_built, dist_to_freeway_m)
+```
+
+
+
+```{r}
+# Calculating observed difference in means
+pre <-sc |> 
+  filter(year_built < 1970) |> 
+  summarize(pre_mean = mean(mean_pb_ppm, na.rm = TRUE))
+
+post <-sc |> 
+  filter(year_built >= 1970) |> 
+  summarize(post_mean = mean(mean_pb_ppm, na.rm = TRUE))
+
+obs_dm <- pre$pre_mean - post$post_mean
+```
+
+
+```{r}
+# Creating groups for homes built before 1970 and in 1970 or later
+
+sc <- sc |>
+  mutate(
+    year_group = if_else(year_built < 1970, "pre", "post")
+  )
+```
+
+
+```{r}
+# Calculating group means by year
+shuff_summ <- sc |>
+  mutate(year_group = sample(year_group)) |>
+  summarize(
+    mean_pb_ppm = mean(mean_pb_ppm, na.rm = TRUE),
+    .by = year_group
+  )
+
+# Shuffling/Randomizing predictor variable
+# Breaks connection between year and lead concentration
+# Recalculates statistic
+
+shuff_diff_means <-
+  shuff_summ$mean_pb_ppm[shuff_summ$year_group == "pre"] -
+  shuff_summ$mean_pb_ppm[shuff_summ$year_group == "post"]
+
+shuff_diff_means
+```
+
+
+```{r} 
+# Repeats the shuffling 10,000 times
+# Simulates Null distribution
+
+y_null_dist <-replicate(
+    10000,
+    {
+        shuff_summ<-sc |> 
+            mutate(year_group = sample(year_group)) |> 
+            summarize(mean_pb_ppm = mean(mean_pb_ppm), .by = (year_group))
+          
+shuff_summ$mean_pb_ppm[shuff_summ$year_group == "pre"] - shuff_summ$mean_pb_ppm[shuff_summ$year_group == "post"]
+    }
+)
+```
+
+
+```{r}
+tibble(diff_means = y_null_dist) |>
+  ggplot(aes(diff_means)) +
+  geom_histogram(binwidth = 5) +
+  labs(
+    x = "Difference in Means",
+    y = "Frequency"
+  )+
+  geom_vline(xintercept = obs_dm, color = "dodgerblue", linewidth = 1.5)
+```
+
+```{r}
+pval <- mean(y_null_dist > obs_dm)
+
+pval
+```
+
+
+# Result
+
+
+
+# Conclusion
+
+What does this mean for your question?
+
+What characteristics of the data may impact your inference?
+
+
+
+
 
 :::
 
