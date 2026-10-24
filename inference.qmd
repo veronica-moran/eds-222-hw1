@@ -1,13 +1,21 @@
 ---
-title: EDS 222 HW1
-subtitle: Foundations of inference
-author: Veronica Moran
+title: "EDS 222: Homework 1"
+subtitle: "Foundations of Inference"
+author: "Veronica Moran"
+date: October 22, 2026
+format: typst
+execute:
+  echo: true
+  warning: false
+  message: false
+  results: hide
 ---
 
 ```{r}
 library(tidyverse)
+set.seed(222)
+theme_set(theme_bw())
 ```
-
 
 ## 1. Conduct a permutation test
 
@@ -23,6 +31,7 @@ This file contains the year each property was built.
 The question is about _average lead soil concentrations_. 
 You'll need to first get the average lead soil concentration for each property,
 then join your result to the property covariate data to get the year the house was built.
+:::
 
 ## Permutation Test: Average Lead Soil Concentrations
 # Comparing Homes Built Before 1970 and Homes Built in 1970 or Later
@@ -34,7 +43,6 @@ Do homes built pre-1970 have higher average lead soil concentrations?
 
 Ho: There is no difference in lead concentration between homes built before 1970 and homes built after 1970.
 Ha: Homes built before 1970 have higher lead concentrations compared to homes built after 1970.
-
 
 ```{r}
 soil_cores<-read_csv("exide-soil-cores.csv")
@@ -68,32 +76,46 @@ sc_yr <- pi_means|>
 ```
 
 ```{r}
-glimpse(sc_yr)
-```
-
-```{r}
-summary(sc_yr)
-```
-
-```{r}
-# Calculating observed difference in means
-pre <-sc_yr |> 
-  filter(year_built < 1970) |> 
-  summarize(pre_mean = mean(mean_pb_ppm, na.rm = TRUE))
-
-post <-sc_yr |> 
-  filter(year_built >= 1970) |> 
-  summarize(post_mean = mean(mean_pb_ppm, na.rm = TRUE))
-
-obs_yr_dm <- pre$pre_mean - post$post_mean
-```
-
-```{r}
 # Creating groups for homes built before 1970 and in 1970 or later
-
 sc_yr <- sc_yr |>
   mutate(
     year_group = if_else(year_built < 1970, "pre", "post")
+  )
+
+# Calculating observed difference in means
+obs_summ <- sc_yr |>
+  summarize(mean_pb_ppm = mean(mean_pb_ppm, na.rm = TRUE), .by = year_group)
+
+obs_yr_dm <- obs_summ$mean_pb_ppm[obs_summ$year_group == "pre"] -
+  obs_summ$mean_pb_ppm[obs_summ$year_group == "post"]
+```
+
+```{r}
+#| fig-width: 8
+
+# Visualizing raw data by year built
+ggplot(sc_yr, aes(x = year_group, y = mean_pb_ppm, color = year_group)) +
+  geom_point(size = 1.75, alpha = 0.5,
+             position = position_jitter(width = 0.2, height = 0)) +
+  stat_summary(
+    aes(linetype = "Group mean"),
+    fun = mean, fun.min = mean, fun.max = mean,
+    geom = "errorbar", width = 0.5,
+    color = "black", linewidth = 1,
+    key_glyph = "path"
+  ) +
+  scale_x_discrete(limits = c("pre", "post"),
+                   labels = c("pre" = "Before 1970", "post" = "1970 or later")) +
+  scale_color_discrete(limits = c("pre", "post"),
+                       labels = c("pre" = "Before 1970", "post" = "1970 or later")) +
+  theme(text = element_text(size = 15),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(
+    x = "Year Built",
+    y = "Mean Soil Lead (ppm)",
+    title = "Soil Lead by Year Built",
+    color = "Group",
+    linetype = NULL
   )
 ```
 
@@ -119,34 +141,33 @@ shuff_diff_means
 
 ```{r} 
 # Creates NULL distribution
+y_null_dist <- replicate(
+  10000,
+  {
+    shuff_summ <- sc_yr |>
+      mutate(year_group = sample(year_group)) |>
+      summarize(mean_pb_ppm = mean(mean_pb_ppm, na.rm = TRUE), .by = year_group)
 
-y_null_dist <-replicate(
-    10000,
-    {
-        shuff_summ<-sc_yr |> 
-            mutate(year_group = sample(year_group)) |> 
-            summarize(mean_pb_ppm = mean(mean_pb_ppm), .by = (year_group))
-          
-shuff_summ$mean_pb_ppm[shuff_summ$year_group == "pre"] - shuff_summ$mean_pb_ppm[shuff_summ$year_group == "post"]
-    }
+    shuff_summ$mean_pb_ppm[shuff_summ$year_group == "pre"] -
+      shuff_summ$mean_pb_ppm[shuff_summ$year_group == "post"]
+  }
 )
 ```
 
 # Results
 
-
 ```{r}
 # Graphs Permutation NUll Distribution
-
 tibble(diff_means = y_null_dist) |>
   ggplot(aes(diff_means)) +
   geom_histogram(binwidth = 5) +
   labs(
     x = "Difference in Mean Soil Lead Concentration (ppm)",
     y = "Frequency", 
-    title = "Null Distribution for Soil Lead Concentration in Homes by Group Year"
-  )+ theme_bw()+
-  geom_vline(xintercept = obs_yr_dm, color = "dodgerblue", linewidth = 1.5)
+    title = "Soil Lead Null Distribution: Pre- vs. Post-1970 Homes"
+  )+ theme(
+  plot.title = element_text(hjust = 0.5))+
+  geom_vline(xintercept = obs_yr_dm, color = "dodgerblue", linewidth = 1.5) + annotate("rect", xmin = obs_yr_dm, xmax = Inf, ymin = 0, ymax = Inf, fill = "red", alpha = 0.2)
 ```
 
 ```{r}
@@ -159,28 +180,23 @@ pval_yr
 obs_yr_dm
 ```
 
-The p-value for the null distribution of the permutation test is 0.
-
-The difference in observed values on means is 153.98 ppm.
-
-The difference in means between the observed values of the sample and the p-value of the permutation test is much larger than what we would expect by random chance alone. 
-
+The observed difference in mean soil lead between homes built before 1970 and homes built after 1970 is 153.98 ppm.
+In 10,000 permutations, none produced a difference as large as 153.98 ppm, so the estimated p-value is approximately 0. The shaded region marks the p-value area.
+This observed difference is much larger than the differences we would expect from random chance alone.
 
 # Conclusion
 
-I reject the null hypothesis, there is enough evidence to suport the alternative hypothesis that homes built before 1970 have higher lead concentrations comapared to homes built after 1970.
+Since the p-value is less than our threshold of 0.05, we reject the null hypothesis that there is no difference in lead concentration between homes built before 1970 and homes built after 1970.
+There is enough evidence to support the alternative hypothesis that homes built before 1970 have higher lead concentrations compared to homes built after 1970. 
+The large difference in group sizes, 303 homes before 1970 and only 11 after, could impact our inferences. 
 
-Differences in group size can impact the inferences. There are 303 homes that were built before 1970 and only 11 homes that were built after 1970
 
-
-:::
 
 ## 2. Estimate a confidence interval
 
 Estimate a confidence interval to investigate the following question:
 
 > How much is the difference in average lead soil concentrations between properties within 1km of a freeway and those farther away?
-
 
 ```{r}
 sc_frw <- pi_means|>
@@ -190,7 +206,7 @@ sc_frw <- pi_means|>
 ```
 
 ```{r}
-# Creating groups for distance from freewayless than or equal to 1 km and more than 1 km 
+# Creating groups for distance from freeway, less than or equal to 1 km and more than 1 km 
 sc_frw <- sc_frw |>
   mutate(
     frw_group = if_else(km_frw <= 1, "less", "more")
@@ -204,17 +220,46 @@ less_1km <- sc_frw |>
 more_1km <- sc_frw |>
   filter(km_frw > 1)
 
-#  Calculating shuffled group means
-less_mean <- less_1km |>
-  summarize(mean_l= mean(mean_pb_ppm, na.rm = TRUE))
-less_mean
-more_mean <-more_1km |>
-  summarize(mean_m = mean(mean_pb_ppm, na.rm = TRUE))
-more_mean
-ob_km_dm <- less_mean$mean_l - more_mean$mean_m
+#  Calculating observed group means
+obs_summ <- sc_frw |>
+  summarize(mean_pb_ppm = mean(mean_pb_ppm, na.rm = TRUE), .by = frw_group)
+
+ob_km_dm <- obs_summ$mean_pb_ppm[obs_summ$frw_group == "less"] -
+  obs_summ$mean_pb_ppm[obs_summ$frw_group == "more"]
 
 ob_km_dm
 ```
+
+
+```{r}
+#| fig-width: 8
+
+# Visualizing raw data by freeway distance group
+
+# Visualizing raw data by freeway distance group
+ggplot(sc_frw, aes(x = frw_group, y = mean_pb_ppm, color = frw_group)) +
+  geom_point(size = 1.75, alpha = 0.5,
+             position = position_jitter(width = 0.2, height = 0)) +
+  stat_summary(
+    aes(linetype = "Group mean"),
+    fun = mean, fun.min = mean, fun.max = mean,
+    geom = "errorbar", width = 0.5,
+    color = "black", linewidth = 1,
+    key_glyph = "path"
+  ) +
+  scale_x_discrete(labels = c("less" = "Within 1 km", "more" = "More than 1 km")) +
+  scale_color_discrete(labels = c("less" = "Within 1 km", "more" = "More than 1 km")) +
+  theme(text = element_text(size = 15),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(
+    x = "Distance from Freeway",
+    y = "Mean Soil Lead (ppm)",
+    title = "Soil Lead by Distance from Freeway",
+    color = "Group",
+    linetype = NULL
+  )
+```
+
 
 ```{r}
 # 1 bootstrap sample
@@ -242,10 +287,12 @@ frw_mean_diff <-
   less_sp$mean_pb_ppm - more_sp$mean_pb_ppm
 frw_mean_diff
 ```
+
 ```{r}
 frw_dist <- replicate(
   10000,
-  {less_sample <- less_1km |>
+  {
+    less_sample <- less_1km |>
   slice_sample(
     n = nrow(less_1km),
     replace = TRUE
@@ -263,47 +310,44 @@ more_sp <- more_sample |>
 less_sp$mean_pb_ppm - more_sp$mean_pb_ppm
   }
 )
-
 ```
 
 # Results
 
-The bootsstrap test shows that the observed difference of lead concentration is 79.3 ppm.
-The obseved difference and the bootstrap(null?) distribution are centered around the same value. 
-
-The 95% confidence interval is 47.41 ppm to 110.91 ppm with a standard error of 16.11.
-
+```{r}
+ci <- quantile(frw_dist, probs = c(0.025, 0.975))
+print(ci)
+```
 
 ```{r}
 tibble(diff_means = frw_dist) |>
-  ggplot(aes(diff_means)) +
+  ggplot(aes(diff_means)) + 
+  annotate("rect", xmin = ci[1], xmax = ci[2], ymin = 0, ymax = Inf,
+              fill = "blue", alpha = 0.1) +
   geom_histogram(binwidth = 5) +
   labs(
     x = "Difference in Mean Lead Soil Concentration (ppm)",
     y = "Frequency",
     title = "Bootstrap Distribution by Freeway Distance"
-  )+ theme_bw() +
-  geom_vline(xintercept = ob_km_dm, color = "green", linewidth = 1.5)
+  )+ theme(
+  plot.title = element_text(hjust = 0.5))+
+  geom_vline(xintercept = ob_km_dm, color = "orchid", linewidth = 1.5) +
+  geom_vline(xintercept = ci, linetype = "dashed", linewidth = 1.5) 
 ```
 
 
- ```{r}
- se <- sd(frw_dist)
- head(se)
+The observed difference in mean soil lead concentration is 79.3 ppm. The bootstrap distribution is centered around this value. 
 
- ob_km_dm- 1.96 * se
- ob_km_dm +1.96 *se
- ```
+The 95% confidence interval for the difference in mean lead soil concentration for homes within 1 km of a freeway and those farther away is 46.04 ppm to 109.55 ppm.
 
 
 # Conclusion
 
-The plausible values for the population mean is within 47.7 ppm and 110.
-There is 95% confidence that this method will observe the true mean of the population.
+The plausible values for the difference in population means are between 46.04 ppm and 109.55 ppm.
 
-This provides evidence that properties within 1 km of freeway had average lead soil concentrations that are about 79 ppm higher that properties that are farther than 1 km from the freeway.
+This provides evidence that properties within 1 km of a freeway had average lead soil concentrations that are about 79 ppm higher than properties that are farther than 1 km from the freeway.
 
-
+If we repeatedly sampled and built an interval, about 95% of those intervals would contain the true difference in mean soil lead between properties within 1 km of a freeway and those farther away.
 
 ## 3. Simulate a negative result
 
@@ -312,19 +356,32 @@ Therefore, if you draw a sample from two groups that part of the same population
 In other words, a negative result (no actual difference) will yield a significant p-value at the 0.05 threshold in 5% of samples.
 This is known as the **false positive rate**.
 
-To simulate a negative result, perform the following.==
+To simulate a negative result, perform the following.
 
 1. Define a normally-distributed population. Pick any mean and standard deviation.
 
 Population Mean = 73
 Population SD = 16
 
-2. Draw a sample of 50 observations from this population. Assign the first 25 to group A and the second 25 to group B.
-
 ```{r}
 normal_sample<- tibble(x = rnorm(50, mean = 73, sd = 16))
 normal_sample
 ```
+
+```{r}
+tibble(
+  x = seq(9, 137, length.out = 1000),
+  pdf = dnorm(x, mean = 73, sd = 16)
+) |>
+  ggplot(aes(x, pdf)) +
+  geom_line(linewidth = 1.5) +
+  theme(
+  plot.title = element_text(hjust = 0.5))+
+  labs(x = "Value", y = "Density", title = "Population PDF")
+```
+
+
+2. Draw a sample of 50 observations from this population. Assign the first 25 to group A and the second 25 to group B.
 
 ```{r}
 normal_sample <- normal_sample |>
@@ -402,101 +459,87 @@ ab_null_dist <- replicate(
 
 tibble(diff_means = ab_null_dist) |>
   ggplot(aes(diff_means)) +
-  geom_histogram(binwidth = 5) +
+  geom_histogram() +
   labs(
     x = "Difference in Group Means",
     y = "Frequency",
     title = "Null Distribution for Group Mean Differences",
-    )+ theme_bw()+
+    ) +
+      theme(
+  plot.title = element_text(hjust = 0.5))+
       geom_vline(xintercept = ob_ab_dm, color = "red", linewidth = 1.5)
 ```
 
-
 4. Record your p-value.
-
 ```{r}
 pval_ab <- mean(ab_null_dist > ob_ab_dm )
-pval_ab
+print(pval_ab)
 ```
-
-
 
 5. Repeat the simulation 1,000 times.
 
 ```{r}
-# Could not figure out how to replicate within a replicate
+  # each pass through the braces of the outer replicate() is one full experiment
+n_sims <- 1000   
+n_perms <- 1000 
 
-#pval_null_dist 
+p_vals <- replicate(
+  n_sims,
+  {
+    normal_sample <- tibble(x = rnorm(50, mean = 73, sd = 16)) |>
+      mutate(group = if_else(1:50 <= 25, "A", "B"))
 
-#ab_null_dist <- replicate(
-# 1000,
- # {
-    #normal_sample<- tibble(x = rnorm(50, mean = 73, sd = 16))
-#normal_sample
+    a_mean <- normal_sample |>
+      filter(group == "A") |>
+      summarize(mn_a = mean(x, na.rm = TRUE))
+    b_mean <- normal_sample |>
+      filter(group == "B") |>
+      summarize(mn_b = mean(x, na.rm = TRUE))
+    ob_ab_dm <- a_mean$mn_a - b_mean$mn_b
 
-#normal_sample <- normal_sample |>
-  #mutate(
-     # group = if_else(1:50 <=25, "A", "B"))
+    ab_null_dist <- replicate(
+      n_perms,
+      {
+        shuff_sm <- normal_sample |>
+          mutate(group = sample(group)) |>
+          summarize(x = mean(x, na.rm = TRUE), .by = group)
+        shuff_sm$x[shuff_sm$group == "A"] - shuff_sm$x[shuff_sm$group == "B"]
+      }
+    )
 
-#means<- normal_sample |> 
- #   summarize(mean= mean(x), .by = group)
-  #means
+    (sum(ab_null_dist >= ob_ab_dm) + 1) / (n_perms + 1)
+  }
+)
 
-#a <- normal_sample |>
-  #filter(group == "A")
-#b <- normal_sample |>
- # filter(group == "B")
-
-#a_mean <- a |>
- # summarize(mn_a = mean(x, na.rm = TRUE))
-#a_mean
-#b_mean <-b |>
- # summarize(mn_b = mean(x, na.rm = TRUE))
-#a_mean
-#ob_ab_dm <- a_mean$mn_a - b_mean$mn_b
-
-#shuff_sm <- normal_sample |>
- # mutate(group = sample(group)) |>
-  #summarize(
-   # x = mean(x, na.rm = TRUE),
-    #.by = group
- # )
-
-#shuff_mn_diff <-
- # shuff_sm$x[shuff_sm$group == "A"] -
-  #shuff_sm$x[shuff_sm$group == "B"]
-#shuff_mn_diff
-
-#ab_null_dist <- replicate(
- # 1000,
-  ## shuff_sm <- normal_sample |>
-    #  mutate(group = sample(group)) |>
-     # summarize(
-      #  x = mean(x, na.rm = TRUE),
-      #  .by = group
-     # )
-   # shuff_sm$x[shuff_sm$group == "A"] - shuff_sm$x[shuff_sm$group == "B"]
-  #}
-#)
-
- # }
-#)
-
-
+all_pvals <- tibble(p_value = p_vals)
 ```
-
-
-
 
 ```{r}
-#pval_ab_2 <- mean(y_null_dist > obs_yr_dm)
-#pval_ab_2
+# Visualizing 
+all_pvals |>
+   ggplot(aes(x = p_value, fill = p_value < 0.05)) +
+   geom_histogram(binwidth = 0.05, boundary = 0) +
+   scale_fill_manual(values = c("grey40", "red"),
+                     labels = c("p >= 0.05", "False positive (p < 0.05)"),
+                     name = "Results") +
+  geom_vline(
+    xintercept = 0.05,
+    linetype = "dashed",
+    color = "red"
+  ) + theme(
+  plot.title = element_text(hjust = 0.5))+
+  labs(
+    x = "P-value",
+    y = "Frequency",
+    title = "Distribution of P-values"
+  )
 ```
-
-
 
 When you're done, verify that your p-value is less than 0.05 in approximately 5% (50) of your simulations.
 
+```{r}
+mean(p_vals < 0.05)
+```
 
-
+_% of simulations had a p-values less than 0.05, which reflects the expected false positive.
 
