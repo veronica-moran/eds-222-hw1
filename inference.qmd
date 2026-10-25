@@ -541,5 +541,5 @@ When you're done, verify that your p-value is less than 0.05 in approximately 5%
 mean(p_vals < 0.05)
 ```
 
-_% of simulations had a p-values less than 0.05, which reflects the expected false positive.
+4.3 % of simulations had a p-values less than 0.05, which reflects the expected false positive.
 
